@@ -2,6 +2,13 @@ private struct PGClass: PostgreSQLTable {
     static let sqlTableIdentifierString = "pg_class"
     var oid: UInt32
     var relname: String
+    var relnamespace: String?
+}
+
+private struct PGNamespace: PostgreSQLTable {
+    static let sqlTableIdentifierString = "pg_namespace"
+    var oid: UInt32
+    var nspname: String
 }
 
 extension PostgreSQLConnection {
@@ -53,7 +60,7 @@ extension PostgreSQLConnection {
         if let existing = tableNameCache, !refresh {
             return future(existing)
         } else {
-            return select().column("oid").column("relname").from(PGClass.self).all().map { rows in
+            return select().column(\PGClass.oid).column("relname").from(PGClass.self).join(\PGClass.relnamespace, to: \PGNamespace.oid).where(\PGNamespace.nspname, .notLike, "fdw%").all().map { rows in
                 let rows = try rows.map { try self.decode(PGClass.self, from: $0, table: nil) }
                 let new = TableNameCache(rows)
                 self.tableNameCache = new
