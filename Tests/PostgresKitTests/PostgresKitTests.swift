@@ -126,6 +126,48 @@ class PostgresKitTests: XCTestCase {
         XCTAssertEqual(test.bar, nil)
         XCTAssertEqual(test.baz, "baz")
     }
+    
+    func testDecodeModelWithEnum() throws {
+        let conn = try PostgresConnection.test(on: self.eventLoop).wait()
+        defer { try! conn.close().wait() }
+
+        let rows = try conn.query("SELECT 'foo'::text as foo").wait()
+        let row = rows[0]
+        
+        struct Test: Codable {
+            var foo: TestEnum
+            
+            enum TestEnum: String, Codable {
+                case foo
+            }
+        }
+
+        let test = try row.sql().decode(model: Test.self)
+        XCTAssertEqual(test.foo, .foo)
+    }
+    
+    func testUnsuccessfullyDecodeModelWithEnum() throws {
+        let conn = try PostgresConnection.test(on: self.eventLoop).wait()
+        defer { try! conn.close().wait() }
+
+        let rows = try conn.query("SELECT 'bar'::text as foo").wait()
+        let row = rows[0]
+        
+        struct Test: Codable {
+            var foo: TestEnum
+            
+            enum TestEnum: String, Codable {
+                case foo
+            }
+        }
+        
+        do {
+            _ = try row.sql().decode(model: Test.self)
+        } catch {
+            let errorDescription: String = (error as CustomStringConvertible).description
+            XCTAssert(errorDescription == "Unexpected data type: TEXT. Expected jsonb/json.")
+        }
+    }
 
     func testEventLoopGroupSQL() throws {
         var configuration = PostgresConfiguration.test
